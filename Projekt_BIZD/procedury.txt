@@ -1,0 +1,110 @@
+create or replace PROCEDURE AktualizujStatusLotu (
+    p_id_lotu NUMBER,
+    p_nowy_status VARCHAR2
+) IS
+    e_bledny_status EXCEPTION;
+BEGIN
+    IF p_nowy_status NOT IN ('Planowany', 'Opóźniony', 'Anulowany', 'W trakcie', 'Zakończony') THEN
+        RAISE e_bledny_status;
+    END IF;
+
+    UPDATE Loty
+    SET status_lotu = p_nowy_status
+    WHERE id_lotu = p_id_lotu;
+
+    IF SQL%ROWCOUNT = 0 THEN
+        RAISE_APPLICATION_ERROR(-20001, 'Nie znaleziono lotu o podanym ID.');
+    END IF;
+
+    DBMS_OUTPUT.PUT_LINE('Status lotu został zaktualizowany.');
+EXCEPTION
+    WHEN e_bledny_status THEN
+        DBMS_OUTPUT.PUT_LINE('Błąd: Niepoprawny status lotu.');
+    WHEN OTHERS THEN
+        DBMS_OUTPUT.PUT_LINE('Nieznany błąd: ' || SQLERRM);
+END;
+/
+
+create or replace PROCEDURE DodajLot (
+    p_id_lotu NUMBER,
+    p_numer_lotu VARCHAR2,
+    p_skad VARCHAR2,
+    p_dokad VARCHAR2,
+    p_data_odlotu DATE,
+    p_data_przylotu DATE,
+    p_status_lotu VARCHAR2
+) IS
+    e_bledny_status EXCEPTION;
+    e_bledne_daty EXCEPTION;
+BEGIN
+    IF p_status_lotu NOT IN ('Planowany', 'Opóźniony', 'Anulowany', 'W trakcie', 'Zakończony') THEN
+        RAISE e_bledny_status;
+    END IF;
+
+    IF p_data_przylotu < p_data_odlotu THEN
+        RAISE e_bledne_daty;
+    END IF;
+    INSERT INTO Loty (id_lotu, numer_lotu, skad, dokad, data_odlotu, data_przylotu, status_lotu)
+    VALUES (p_id_lotu, p_numer_lotu, p_skad, p_dokad, p_data_odlotu, p_data_przylotu, p_status_lotu);
+
+    DBMS_OUTPUT.PUT_LINE('Lot został pomyślnie dodany.');
+
+EXCEPTION
+    WHEN e_bledny_status THEN
+        DBMS_OUTPUT.PUT_LINE('Błąd: Niepoprawny status lotu.');
+    WHEN e_bledne_daty THEN
+        DBMS_OUTPUT.PUT_LINE('Błąd: Data przylotu nie może być wcześniejsza niż data odlotu.');
+    WHEN OTHERS THEN
+        DBMS_OUTPUT.PUT_LINE('Nieznany błąd: ' || SQLERRM);
+END;
+/
+
+create or replace PROCEDURE UtworzPodsumowanieKwartalne IS
+BEGIN
+    INSERT INTO Podsumowania (typ_podsumowania, okres, liczba_lotow, srednia_opoznienie)
+    SELECT
+        'Kwartalne' AS typ_podsumowania,
+        'Q' || TO_CHAR(data_odlotu, 'Q') || '-' || TO_CHAR(data_odlotu, 'YYYY') AS okres,
+        COUNT(*) AS liczba_lotow,
+        ROUND(AVG((data_przylotu - data_odlotu) * 24 * 60), 2) AS srednia_opoznienie
+    FROM Loty
+    WHERE data_odlotu >= ADD_MONTHS(TRUNC(SYSDATE, 'Q'), -3)
+      AND data_odlotu < TRUNC(SYSDATE, 'Q')
+    GROUP BY TO_CHAR(data_odlotu, 'Q'), TO_CHAR(data_odlotu, 'YYYY');
+    
+    DBMS_OUTPUT.PUT_LINE('Podsumowanie kwartalne zostało zapisane.');
+END;
+/
+
+create or replace PROCEDURE UtworzPodsumowanieMiesieczne IS
+BEGIN
+    INSERT INTO Podsumowania (typ_podsumowania, okres, liczba_lotow, srednia_opoznienie)
+    SELECT
+        'Miesięczne' AS typ_podsumowania,
+        TO_CHAR(data_odlotu, 'YYYY-MM') AS okres,
+        COUNT(*) AS liczba_lotow,
+        ROUND(AVG((data_przylotu - data_odlotu) * 24 * 60), 2) AS srednia_opoznienie
+    FROM Loty
+    WHERE data_odlotu >= ADD_MONTHS(TRUNC(SYSDATE, 'MM'), -1)
+      AND data_odlotu < TRUNC(SYSDATE, 'MM')
+    GROUP BY TO_CHAR(data_odlotu, 'YYYY-MM');
+    
+    DBMS_OUTPUT.PUT_LINE('Podsumowanie miesięczne zostało zapisane.');
+END;
+/
+
+create or replace PROCEDURE UtworzPodsumowanieRoczne IS
+BEGIN
+    INSERT INTO Podsumowania (typ_podsumowania, okres, liczba_lotow, srednia_opoznienie)
+    SELECT
+        'Roczne' AS typ_podsumowania,
+        TO_CHAR(data_odlotu, 'YYYY') AS okres,
+        COUNT(*) AS liczba_lotow,
+        ROUND(AVG((data_przylotu - data_odlotu) * 24 * 60), 2) AS srednia_opoznienie
+    FROM Loty
+    WHERE data_odlotu >= ADD_MONTHS(TRUNC(SYSDATE, 'YYYY'), -12)
+      AND data_odlotu < TRUNC(SYSDATE, 'YYYY')
+    GROUP BY TO_CHAR(data_odlotu, 'YYYY');
+    
+    DBMS_OUTPUT.PUT_LINE('Podsumowanie roczne zostało zapisane.');
+END;

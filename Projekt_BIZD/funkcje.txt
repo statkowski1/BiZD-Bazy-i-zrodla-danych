@@ -1,0 +1,45 @@
+create or replace FUNCTION PobierzPodsumowanie (
+    p_typ_podsumowania VARCHAR2,
+    p_okres VARCHAR2
+) RETURN SYS_REFCURSOR IS
+    wynik SYS_REFCURSOR;
+BEGIN
+    OPEN wynik FOR
+    SELECT *
+    FROM Podsumowania
+    WHERE typ_podsumowania = p_typ_podsumowania
+      AND okres = p_okres;
+    RETURN wynik;
+END;
+/
+
+create or replace FUNCTION SprawdzDaneLotu (
+    p_numer_lotu VARCHAR2,
+    p_data_odlotu DATE,
+    p_data_przylotu DATE,
+    p_status_lotu VARCHAR2
+) RETURN NUMBER IS
+    akceptowane_statusy CONSTANT SYS.ODCIVARCHAR2LIST := SYS.ODCIVARCHAR2LIST('Planowany', 'Opóźniony', 'Anulowany', 'W trakcie', 'Zakończony');
+    status_poprawny BOOLEAN := FALSE;
+BEGIN
+    IF NOT REGEXP_LIKE(p_numer_lotu, '^LOT\d{3}$') THEN
+        RETURN 0;
+    END IF;
+
+    IF p_data_przylotu < p_data_odlotu THEN
+        RETURN 0;
+    END IF;
+
+    FOR i IN 1..akceptowane_statusy.COUNT LOOP
+        IF akceptowane_statusy(i) = p_status_lotu THEN
+            status_poprawny := TRUE;
+            EXIT;
+        END IF;
+    END LOOP;
+
+    IF NOT status_poprawny THEN
+        RETURN 0;
+    END IF;
+
+    RETURN 1;
+END;

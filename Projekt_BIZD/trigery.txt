@@ -1,0 +1,38 @@
+create or replace TRIGGER LogujZmiany
+AFTER INSERT OR UPDATE OR DELETE ON Loty
+FOR EACH ROW
+DECLARE
+    v_akcja VARCHAR2(10);
+    v_szczegoly VARCHAR2(4000);
+BEGIN
+    IF INSERTING THEN
+        v_akcja := 'INSERT';
+        v_szczegoly := 'Dodano lot: ' || :NEW.numer_lotu;
+    ELSIF UPDATING THEN
+        v_akcja := 'UPDATE';
+        v_szczegoly := 'Zaktualizowano lot: ' || :OLD.numer_lotu || ' -> ' || :NEW.numer_lotu;
+    ELSIF DELETING THEN
+        v_akcja := 'DELETE';
+        v_szczegoly := 'Usunięto lot: ' || :OLD.numer_lotu;
+    END IF;
+    INSERT INTO Logi (akcja, szczegoly)
+    VALUES (v_akcja, v_szczegoly);
+END;
+/
+
+create or replace TRIGGER ArchiwizujLot
+BEFORE DELETE ON Loty
+FOR EACH ROW
+BEGIN
+    INSERT INTO Loty_Archiwum (id_lotu, numer_lotu, skad, dokad, data_odlotu, data_przylotu, status_lotu, data_usuniecia)
+    VALUES (:OLD.id_lotu, :OLD.numer_lotu, :OLD.skad, :OLD.dokad, :OLD.data_odlotu, :OLD.data_przylotu, :OLD.status_lotu, SYSDATE);
+END;
+/
+
+create or replace TRIGGER AktualizujPodsumowania
+AFTER INSERT OR UPDATE OR DELETE ON Loty
+BEGIN
+    UtworzPodsumowanieMiesieczne;
+    UtworzPodsumowanieKwartalne;
+    UtworzPodsumowanieRoczne;
+END;
